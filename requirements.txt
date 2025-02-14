@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pyjwt[crypto]
+passlib[bcrypt]
+pydantic
+python-dotenv 
+
+# pip install -r requirements.txt
