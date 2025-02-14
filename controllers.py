@@ -13,3 +13,17 @@ def get_vehicles():
     cursor.close()
     connection.close()
     return vehicles
+
+@router.get("/allusers")
+def get_users():
+    db = get_db_connection()
+    if not db:
+        return {"error": "Problème de connexion à la base de données"}
+
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT id, username email, password, created_at FROM users")
+    users = cursor.fetchall()
+    cursor.close()
+    db.close()
+
+    return {"users": users}
