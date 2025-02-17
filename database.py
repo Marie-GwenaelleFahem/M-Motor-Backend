@@ -1,15 +1,9 @@
-import mysql.connector
 import os
 from dotenv import load_dotenv
+from databases import Database
 
 load_dotenv()
 
-DB_CONFIG = {
-    "host": os.getenv("DB_HOST"),
-    "user": os.getenv("DB_USER"),
-    "password": os.getenv("DB_PASSWORD"),
-    "database": os.getenv("DB_NAME"),
-}
+DATABASE_URL = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 
-def get_db_connection():
-    return mysql.connector.connect(**DB_CONFIG)
+database = Database(DATABASE_URL)
