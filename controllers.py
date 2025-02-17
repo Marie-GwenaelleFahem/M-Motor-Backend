@@ -1,15 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from database import get_db_connection
+from database import database
 from models import VehicleCreate
 
 router = APIRouter()
 
 @router.get("/vehicles/")
-def get_vehicles():
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM vehicles")
-    vehicles = cursor.fetchall()
-    cursor.close()
-    connection.close()
+async def get_vehicles():
+    query = "SELECT * FROM vehicles"
+    vehicles = await database.fetch_all(query)
     return vehicles
