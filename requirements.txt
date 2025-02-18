@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+databases
+asyncpg
+python-dotenv
