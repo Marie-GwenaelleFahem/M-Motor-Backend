@@ -23,3 +23,19 @@ class OrderCreate(BaseModel):
     options: Optional[dict] = None
     start_date: Optional[str] = None
     return_date: Optional[str] = None
+    
+    
+class SubscriptionCreate(BaseModel):
+    user_id: int
+    vehicle_id: int
+    price: PositiveFloat
+    start_date: datetime
+    end_date: datetime
+    
+
+class RentedVehicle(BaseModel):
+    vehicle_id: int
+    model: str
+    start_date: datetime
+    return_date: datetime
+    username: str
