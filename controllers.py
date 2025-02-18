@@ -24,6 +24,8 @@ class Token(BaseModel):
 
 @router.get("/vehicles/")
 async def get_vehicles():
+    if not database.is_connected:
+        await database.connect()
     query = "SELECT * FROM vehicles"
     vehicles = await database.fetch_all(query)
     return vehicles
@@ -32,7 +34,7 @@ async def get_vehicles():
 async def get_users():
     query = "SELECT id, username, email, password, created_at FROM users"
     users = await database.fetch_all(query)
-    return {"users": users}
+    return users
 
 @router.post("/addusers/")
 async def create_user(user: UserCreate):
