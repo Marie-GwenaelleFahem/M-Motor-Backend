@@ -5,3 +5,4 @@ __pycache__/models.cpython-313.pyc
 __pycache__/authentification.cpython-313.pyc
 __pycache__/controllers.cpython-313.pyc
 
+.env
