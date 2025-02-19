@@ -23,19 +23,16 @@ class OrderCreate(BaseModel):
     options: Optional[dict] = None
     start_date: Optional[str] = None
     return_date: Optional[str] = None
-    
-    
-class SubscriptionCreate(BaseModel):
-    user_id: int
-    vehicle_id: int
-    price: PositiveFloat
-    start_date: datetime
-    end_date: datetime
-    
 
-class RentedVehicle(BaseModel):
-    vehicle_id: int
-    model: str
-    start_date: datetime
-    return_date: datetime
+# Côté authentification
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: str | None = None
+
+class UserCreate(BaseModel):
     username: str
+    email: str
+    password: str

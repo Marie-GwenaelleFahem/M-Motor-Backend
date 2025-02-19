@@ -1,15 +1,11 @@
+import os
 from dotenv import load_dotenv
 import psycopg2
 import os
+from databases import Database
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 
-def get_db_connection():
-    try:
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    except Exception as e:
-        print(f"Erreur de connexion à la base de données: {e}")
-        return None
+database = Database(DATABASE_URL)
