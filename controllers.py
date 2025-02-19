@@ -14,345 +14,327 @@ router = APIRouter()
 
 # Récupérer tous les véhicules
 @router.get("/vehicles/")
-def get_vehicles():
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute("SELECT * FROM vehicles")
-    vehicles = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    return vehicles
+async def get_vehicles():
+    connection = await get_db_connection()
+    try:
+        vehicles = await connection.fetch("SELECT * FROM vehicles")
+        return vehicles
+    finally:
+        await connection.close()
 
 # Ajouter un véhicule
 @router.post("/vehicles/")
-def add_vehicle(vehicle: VehicleCreate):
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    cursor.execute("""
-        INSERT INTO vehicles (model, purchase_price, rental_price, is_sold)
-        VALUES (%s, %s, %s, %s)
-    """, (vehicle.model, vehicle.purchase_price, vehicle.rental_price, vehicle.is_sold))
-    connection.commit()
-    cursor.close()
-    connection.close()
-    return {"message": "Véhicule bien ajouté"}
+async def add_vehicle(vehicle: VehicleCreate):
+    connection = await get_db_connection()
+    try:
+        await connection.execute("""
+            INSERT INTO vehicles (model, purchase_price, rental_price, is_sold)
+            VALUES ($1, $2, $3, $4)
+        """, vehicle.model, vehicle.purchase_price, vehicle.rental_price, vehicle.is_sold)
+        return {"message": "Véhicule bien ajouté"}
+    finally:
+        await connection.close()
 
 # Mettre à jour un véhicule
 @router.put("/vehicles/{vehicle_id}")
-def update_vehicle(vehicle_id: int, vehicle: VehicleCreate):
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    cursor.execute("SELECT * FROM vehicles WHERE id = %s", (vehicle_id,))
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="Véhicule non trouvé")
-    cursor.execute("""
-        UPDATE vehicles 
-        SET model = %s, purchase_price = %s, rental_price = %s, is_sold = %s
-        WHERE id = %s
-    """, (vehicle.model, vehicle.purchase_price, vehicle.rental_price, vehicle.is_sold, vehicle_id))
-    connection.commit()
-    cursor.close()
-    connection.close()
-    return {"message": "Véhicule mis à jour avec succès"}
+async def update_vehicle(vehicle_id: int, vehicle: VehicleCreate):
+    connection = await get_db_connection()
+    try:
+        existing_vehicle = await connection.fetchrow("SELECT * FROM vehicles WHERE id = $1", vehicle_id)
+        if not existing_vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
+        
+        await connection.execute("""
+            UPDATE vehicles 
+            SET model = $1, purchase_price = $2, rental_price = $3, is_sold = $4
+            WHERE id = $5
+        """, vehicle.model, vehicle.purchase_price, vehicle.rental_price, vehicle.is_sold, vehicle_id)
+        
+        return {"message": "Véhicule mis à jour avec succès"}
+    finally:
+        await connection.close()
 
 # Supprimer un véhicule
 @router.delete("/vehicles/{vehicle_id}")
-def delete_vehicle(vehicle_id: int):
-    connection = get_db_connection()
-    cursor = connection.cursor()
-    cursor.execute("SELECT * FROM vehicles WHERE id = %s", (vehicle_id,))
-    if not cursor.fetchone():
-        raise HTTPException(status_code=404, detail="Véhicule non trouvé")
-    cursor.execute("DELETE FROM vehicles WHERE id = %s", (vehicle_id,))
-    connection.commit()
-    cursor.close()
-    connection.close()
-    return {"message": "Véhicule supprimé avec succès"}
+async def delete_vehicle(vehicle_id: int):
+    connection = await get_db_connection()
+    try:
+        existing_vehicle = await connection.fetchrow("SELECT * FROM vehicles WHERE id = $1", vehicle_id)
+        if not existing_vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
 
-#Acheter un véhicule
+        await connection.execute("DELETE FROM vehicles WHERE id = $1", vehicle_id)
+        return {"message": "Véhicule supprimé avec succès"}
+    finally:
+        await connection.close()
+
+# Acheter un véhicule
 @router.post("/purchase/")
-def purchase_vehicle(order: OrderCreate):
-    connection = get_db_connection()
-    cursor = connection.cursor()
+async def purchase_vehicle(order: OrderCreate):
+    connection = await get_db_connection()
+    try:
+        vehicle = await connection.fetchrow("SELECT is_sold FROM vehicles WHERE id = $1", order.vehicle_id)
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
+        if vehicle['is_sold']:
+            raise HTTPException(status_code=400, detail="Ce véhicule est déjà vendu")
 
-    # Vérifier si le véhicule est déjà vendu
-    cursor.execute("SELECT is_sold FROM vehicles WHERE id = %s", (order.vehicle_id,))
-    vehicle = cursor.fetchone()
+        await connection.execute("""
+            INSERT INTO orders (user_id, vehicle_id, order_type, status, created_at)
+            VALUES ($1, $2, 'purchase', 'pending', $3)
+        """, order.user_id, order.vehicle_id, datetime.now())
 
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Véhicule non trouvé")
-    
-    if vehicle[0]:  # is_sold = 1
-        raise HTTPException(status_code=400, detail="Ce véhicule est déjà vendu")
-
-    # Insérer la commande dans la table `orders`
-    cursor.execute("""
-        INSERT INTO orders (user_id, vehicle_id, order_type, status, created_at)
-        VALUES (%s, %s, 'purchase', 'pending', %s)
-    """, (order.user_id, order.vehicle_id, datetime.now()))
-
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-    return {"message": "Commande d'achat créée, en attente d'approbation"}
-
+        return {"message": "Commande d'achat créée, en attente d'approbation"}
+    finally:
+        await connection.close()
 
 # Louer un véhicule
 @router.post("/rental/")
-def rent_vehicle():
-    connection = get_db_connection()
-    cursor = connection.cursor()
+async def rent_vehicle():
+    connection = await get_db_connection()
+    try:
+        # Exemple de vérification avec des données fictives
+        vehicle = await connection.fetchrow("SELECT id FROM vehicles WHERE id = $1", rental.vehicle_id)
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
 
-    # Vérifier si le véhicule existe
-    cursor.execute("SELECT id FROM vehicles WHERE id = %s", (rental.vehicle_id,))
-    vehicle = cursor.fetchone()
+        await connection.execute("""
+            INSERT INTO orders (user_id, vehicle_id, order_type, status, start_date, return_date, created_at)
+            VALUES ($1, $2, 'rental', 'pending', $3, $4, $5)
+        """, rental.user_id, rental.vehicle_id, rental.start_date, rental.return_date, datetime.now())
 
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Véhicule non trouvé")
-
-    # Vérifier si le véhicule est déjà loué pendant cette période
-    cursor.execute("""
-        SELECT id FROM orders 
-        WHERE vehicle_id = %s 
-        AND order_type = 'rental' 
-        AND status = 'approved'
-        AND ((start_date BETWEEN %s AND %s) OR (return_date BETWEEN %s AND %s))
-    """, (rental.vehicle_id, rental.start_date, rental.return_date, rental.start_date, rental.return_date))
-
-    existing_rental = cursor.fetchone()
-    if existing_rental:
-        raise HTTPException(status_code=400, detail="Ce véhicule est déjà loué sur cette période")
-
-    # Insérer la demande de location
-    cursor.execute("""
-        INSERT INTO orders (user_id, vehicle_id, order_type, status, start_date, return_date, created_at)
-        VALUES (%s, %s, 'rental', 'pending', %s, %s, %s)
-    """, (rental.user_id, rental.vehicle_id, rental.start_date, rental.return_date, datetime.now()))
-
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-    return {"message": "Demande de location créée, en attente d'approbation"}
-
-
-@router.post("/rental-with-subscription/")
-def rent_vehicle_with_subscription(rental_subscription: SubscriptionCreate):
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    # Vérifier si le véhicule existe
-    cursor.execute("SELECT id FROM vehicles WHERE id = %s", (rental_subscription.vehicle_id,))
-    vehicle = cursor.fetchone()
-
-    if not vehicle:
-        raise HTTPException(status_code=404, detail="Véhicule non trouvé")
-
-    # Vérifier si le véhicule est déjà loué pendant cette période
-    cursor.execute("""
-        SELECT id FROM orders 
-        WHERE vehicle_id = %s 
-        AND order_type = 'rental' 
-        AND status = 'approved'
-        AND ((start_date BETWEEN %s AND %s) OR (return_date BETWEEN %s AND %s))
-    """, (rental_subscription.vehicle_id, rental_subscription.start_date, rental_subscription.end_date, rental_subscription.start_date, rental_subscription.end_date))
-
-    existing_rental = cursor.fetchone()
-    if existing_rental:
-        raise HTTPException(status_code=400, detail="Ce véhicule est déjà loué sur cette période")
-
-    # Insérer la demande de location
-    cursor.execute("""
-        INSERT INTO orders (user_id, vehicle_id, order_type, status, start_date, return_date, created_at)
-        VALUES (%s, %s, 'rental', 'pending', %s, %s, %s)
-    """, (rental_subscription.user_id, rental_subscription.vehicle_id, rental_subscription.start_date, rental_subscription.end_date, datetime.now()))
-
-    # Créer l'abonnement
-    cursor.execute("""
-        INSERT INTO subscriptions (user_id, vehicle_id, plan, price, start_date, end_date)
-        VALUES (%s, %s, %s, %s, %s, %s)
-    """, (rental_subscription.user_id, rental_subscription.vehicle_id, rental_subscription.plan, rental_subscription.price, rental_subscription.start_date, rental_subscription.end_date))
-
-    connection.commit()
-    cursor.close()
-    connection.close()
-
-    return {"message": "Demande de location avec abonnement créée, en attente d'approbation"}
-
-
+        return {"message": "Demande de location créée, en attente d'approbation"}
+    finally:
+        await connection.close()
 
 # Récupérer les revenus de tous les véhicules
 @router.get("/vehicles/revenue")
-def get_vehicles_revenue():
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT v.id, v.model, 
-        COALESCE(SUM(
-            CASE 
-                WHEN o.order_type = 'purchase' THEN v.purchase_price
-                WHEN o.order_type = 'rental' THEN v.rental_price * DATEDIFF(o.return_date, o.start_date)
-                ELSE 0
-            END), 0) AS total_revenue
-        FROM vehicles v
-        LEFT JOIN orders o ON v.id = o.vehicle_id AND o.status = 'approved'
-        GROUP BY v.id, v.model
-        ORDER BY total_revenue DESC
-    """)
-    revenues = cursor.fetchall()
-    cursor.close()
-    connection.close()
-    return {"data": revenues}
+async def get_vehicles_revenue():
+    connection = await get_db_connection()
+    try:
+        revenues = await connection.fetch("""
+            SELECT v.id, v.model, 
+            COALESCE(SUM(
+                CASE 
+                    WHEN o.order_type = 'purchase' THEN v.purchase_price
+                    WHEN o.order_type = 'rental' THEN v.rental_price * (EXTRACT(day FROM (o.return_date - o.start_date)))
+                    ELSE 0
+                END), 0) AS total_revenue
+            FROM vehicles v
+            LEFT JOIN orders o ON v.id = o.vehicle_id AND o.status = 'approved'
+            GROUP BY v.id, v.model
+            ORDER BY total_revenue DESC
+        """)
+        return {"data": revenues}
+    finally:
+        await connection.close()
 
-# Récupérer les revenus d'un véhicule spécifique
-@router.get("/vehicles/{vehicle_id}/revenue")
-def get_vehicle_revenue(vehicle_id: int):
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-    cursor.execute("""
-        SELECT v.id, v.model, 
-        COALESCE(SUM(
-            CASE 
-                WHEN o.order_type = 'purchase' THEN v.purchase_price
-                WHEN o.order_type = 'rental' THEN v.rental_price * DATEDIFF(o.return_date, o.start_date)
-                ELSE 0
-            END), 0) AS total_revenue
-        FROM vehicles v
-        LEFT JOIN orders o ON v.id = o.vehicle_id AND o.status = 'approved'
-        WHERE v.id = %s
-        GROUP BY v.id, v.model
-    """, (vehicle_id,))
-    revenue = cursor.fetchone()
-    cursor.close()
-    connection.close()
-    if not revenue:
-        raise HTTPException(status_code=404, detail="Véhicule non trouvé")
-    return revenue
-
-@router.get("/rental-applications/")
-def get_rental_applications(status: str = None):
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-
-    if status == "pending":
-        cursor.execute("SELECT * FROM orders WHERE order_type = 'rental' AND status = %s", ("pending",))
-    elif status == "processed":
-        cursor.execute("SELECT * FROM orders WHERE order_type = 'rental' AND status IN (%s, %s)", ("approved", "rejected"))
-    else:
-        cursor.execute("SELECT * FROM orders WHERE order_type = 'rental'")
-
-    applications = cursor.fetchall()
-
-    cursor.close()
-    connection.close()
-    return {"data": applications}
-
-
-@router.get("/purchase-applications/")
-def get_purchase_applications(status: str = None):
-    connection = get_db_connection()
-    cursor = connection.cursor(dictionary=True)
-
-    if status == "pending":
-        cursor.execute("SELECT * FROM orders WHERE order_type = 'purchase' AND status = %s", ("pending",))
-    elif status == "processed":
-        cursor.execute("SELECT * FROM orders WHERE order_type = 'purchase' AND status IN (%s, %s)", ("approved", "rejected"))
-    else:
-        cursor.execute("SELECT * FROM orders WHERE order_type = 'purchase'")
-
-    applications = cursor.fetchall()
-
-    cursor.close()
-    connection.close()
-    return {"data": applications}
-
-
-# Accepter une demande d'achat
+# Approuver une demande d'achat
 @router.put("/purchase/{order_id}/approve/")
-def approve_purchase(order_id: int):
-    connection = get_db_connection()
-    cursor = connection.cursor()
+async def approve_purchase(order_id: int):
+    connection = await get_db_connection()
+    try:
+        order = await connection.fetchrow("SELECT * FROM orders WHERE id = $1 AND order_type = 'purchase' AND status = 'pending'", order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande d'achat non trouvée ou déjà traitée")
 
-    # Vérifier si la commande existe et est en attente
-    cursor.execute("SELECT * FROM orders WHERE id = %s AND order_type = 'purchase' AND status = 'pending'", (order_id,))
-    order = cursor.fetchone()
-
-    if not order:
-        raise HTTPException(status_code=404, detail="Commande d'achat non trouvée ou déjà traitée")
-
-    # Mettre à jour le statut de la commande à "approved"
-    cursor.execute("UPDATE orders SET status = 'approved' WHERE id = %s", (order_id,))
-    connection.commit()
-
-    cursor.close()
-    connection.close()
-
-    return {"message": "Commande d'achat approuvée avec succès"}
+        await connection.execute("UPDATE orders SET status = 'approved' WHERE id = $1", order_id)
+        return {"message": "Commande d'achat approuvée avec succès"}
+    finally:
+        await connection.close()
 
 # Rejeter une demande d'achat
 @router.put("/purchase/{order_id}/reject/")
-def reject_purchase(order_id: int):
-    connection = get_db_connection()
-    cursor = connection.cursor()
+async def reject_purchase(order_id: int):
+    connection = await get_db_connection()
+    try:
+        order = await connection.fetchrow("SELECT * FROM orders WHERE id = $1 AND order_type = 'purchase' AND status = 'pending'", order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande d'achat non trouvée ou déjà traitée")
 
-    # Vérifier si la commande existe et est en attente
-    cursor.execute("SELECT * FROM orders WHERE id = %s AND order_type = 'purchase' AND status = 'pending'", (order_id,))
-    order = cursor.fetchone()
+        await connection.execute("UPDATE orders SET status = 'rejected' WHERE id = $1", order_id)
+        return {"message": "Commande d'achat rejetée avec succès"}
+    finally:
+        await connection.close()
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Commande d'achat non trouvée ou déjà traitée")
+# Récupérer tous les véhicules
+@router.get("/vehicles/")
+async def get_vehicles():
+    connection = await get_db_connection()
+    try:
+        vehicles = await connection.fetch("SELECT * FROM vehicles")
+        return vehicles
+    finally:
+        await connection.close()
 
-    # Mettre à jour le statut de la commande à "rejected"
-    cursor.execute("UPDATE orders SET status = 'rejected' WHERE id = %s", (order_id,))
-    connection.commit()
+# Ajouter un véhicule
+@router.post("/vehicles/")
+async def add_vehicle(vehicle: VehicleCreate):
+    connection = await get_db_connection()
+    try:
+        await connection.execute("""
+            INSERT INTO vehicles (model, purchase_price, rental_price, is_sold)
+            VALUES (%s, %s, %s, %s)
+        """, vehicle.model, vehicle.purchase_price, vehicle.rental_price, vehicle.is_sold)
+        return {"message": "Véhicule bien ajouté"}
+    finally:
+        await connection.close()
 
-    cursor.close()
-    connection.close()
+# Mettre à jour un véhicule
+@router.put("/vehicles/{vehicle_id}")
+async def update_vehicle(vehicle_id: int, vehicle: VehicleCreate):
+    connection = await get_db_connection()
+    try:
+        existing_vehicle = await connection.fetchrow("SELECT * FROM vehicles WHERE id = $1", vehicle_id)
+        if not existing_vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
+        
+        await connection.execute("""
+            UPDATE vehicles 
+            SET model = %s, purchase_price = %s, rental_price = %s, is_sold = %s
+            WHERE id = %s
+        """, vehicle.model, vehicle.purchase_price, vehicle.rental_price, vehicle.is_sold, vehicle_id)
+        
+        return {"message": "Véhicule mis à jour avec succès"}
+    finally:
+        await connection.close()
 
-    return {"message": "Commande d'achat rejetée avec succès"}
+# Supprimer un véhicule
+@router.delete("/vehicles/{vehicle_id}")
+async def delete_vehicle(vehicle_id: int):
+    connection = await get_db_connection()
+    try:
+        existing_vehicle = await connection.fetchrow("SELECT * FROM vehicles WHERE id = $1", vehicle_id)
+        if not existing_vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
 
+        await connection.execute("DELETE FROM vehicles WHERE id = $1", vehicle_id)
+        return {"message": "Véhicule supprimé avec succès"}
+    finally:
+        await connection.close()
 
-# Approuver une demande de location
-@router.put("/rental/{order_id}/approve/")
-def approve_rental(order_id: int):
-    connection = get_db_connection()
-    cursor = connection.cursor()
+# Acheter un véhicule
+@router.post("/purchase/")
+async def purchase_vehicle(order: OrderCreate):
+    connection = await get_db_connection()
+    try:
+        vehicle = await connection.fetchrow("SELECT is_sold FROM vehicles WHERE id = $1", order.vehicle_id)
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
+        if vehicle['is_sold']:
+            raise HTTPException(status_code=400, detail="Ce véhicule est déjà vendu")
 
-    # Vérifier si la commande existe et est en attente
-    cursor.execute("SELECT * FROM orders WHERE id = %s AND order_type = 'rental' AND status = 'pending'", (order_id,))
-    order = cursor.fetchone()
+        await connection.execute("""
+            INSERT INTO orders (user_id, vehicle_id, order_type, status, created_at)
+            VALUES ($1, $2, 'purchase', 'pending', $3)
+        """, order.user_id, order.vehicle_id, datetime.now())
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Demande de location non trouvée ou déjà traitée")
+        return {"message": "Commande d'achat créée, en attente d'approbation"}
+    finally:
+        await connection.close()
 
-    # Mettre à jour le statut de la commande à "approved"
-    cursor.execute("UPDATE orders SET status = 'approved' WHERE id = %s", (order_id,))
-    connection.commit()
+# Louer un véhicule
+@router.post("/rental/")
+async def rent_vehicle():
+    connection = await get_db_connection()
+    try:
+        # Exemple de vérification avec des données fictives
+        vehicle = await connection.fetchrow("SELECT id FROM vehicles WHERE id = $1", rental.vehicle_id)
+        if not vehicle:
+            raise HTTPException(status_code=404, detail="Véhicule non trouvé")
 
-    cursor.close()
-    connection.close()
+        await connection.execute("""
+            INSERT INTO orders (user_id, vehicle_id, order_type, status, start_date, return_date, created_at)
+            VALUES ($1, $2, 'rental', 'pending', $3, $4, $5)
+        """, rental.user_id, rental.vehicle_id, rental.start_date, rental.return_date, datetime.now())
 
-    return {"message": "Demande de location approuvée avec succès"}
+        return {"message": "Demande de location créée, en attente d'approbation"}
+    finally:
+        await connection.close()
 
-# Rejeter une demande de location
-@router.put("/rental/{order_id}/reject/")
-def reject_rental(order_id: int):
-    connection = get_db_connection()
-    cursor = connection.cursor()
+# Récupérer les revenus de tous les véhicules
+@router.get("/vehicles/revenue")
+async def get_vehicles_revenue():
+    connection = await get_db_connection()
+    try:
+        revenues = await connection.fetch("""
+            SELECT v.id, v.model, 
+            COALESCE(SUM(
+                CASE 
+                    WHEN o.order_type = 'purchase' THEN v.purchase_price
+                    WHEN o.order_type = 'rental' THEN v.rental_price * (EXTRACT(day FROM (o.return_date - o.start_date)))
+                    ELSE 0
+                END), 0) AS total_revenue
+            FROM vehicles v
+            LEFT JOIN orders o ON v.id = o.vehicle_id AND o.status = 'approved'
+            GROUP BY v.id, v.model
+            ORDER BY total_revenue DESC
+        """)
+        return {"data": revenues}
+    finally:
+        await connection.close()
 
-    # Vérifier si la commande existe et est en attente
-    cursor.execute("SELECT * FROM orders WHERE id = %s AND order_type = 'rental' AND status = 'pending'", (order_id,))
-    order = cursor.fetchone()
+# Approuver une demande d'achat
+@router.put("/purchase/{order_id}/approve/")
+async def approve_purchase(order_id: int):
+    connection = await get_db_connection()
+    try:
+        order = await connection.fetchrow("SELECT * FROM orders WHERE id = $1 AND order_type = 'purchase' AND status = 'pending'", order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande d'achat non trouvée ou déjà traitée")
 
-    if not order:
-        raise HTTPException(status_code=404, detail="Demande de location non trouvée ou déjà traitée")
+        await connection.execute("UPDATE orders SET status = 'approved' WHERE id = $1", order_id)
+        return {"message": "Commande d'achat approuvée avec succès"}
+    finally:
+        await connection.close()
 
-    # Mettre à jour le statut de la commande à "rejected"
-    cursor.execute("UPDATE orders SET status = 'rejected' WHERE id = %s", (order_id,))
-    connection.commit()
+# Rejeter une demande d'achat
+@router.put("/purchase/{order_id}/reject/")
+async def reject_purchase(order_id: int):
+    connection = await get_db_connection()
+    try:
+        order = await connection.fetchrow("SELECT * FROM orders WHERE id = $1 AND order_type = 'purchase' AND status = 'pending'", order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande d'achat non trouvée ou déjà traitée")
 
-    cursor.close()
-    connection.close()
+        await connection.execute("UPDATE orders SET status = 'rejected' WHERE id = $1", order_id)
+        return {"message": "Commande d'achat rejetée avec succès"}
+    finally:
+        await connection.close()
 
-    return {"message": "Demande de location rejetée avec succès"}
+@router.get("/orders/{order_id}")
+async def get_order_by_id(order_id: int):
+    connection = await get_db_connection()
+    try:
+        order = await connection.fetchrow("SELECT * FROM orders WHERE id = $1", order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Commande non trouvée")
+        return {"data": order}
+    finally:
+        await connection.close()
+
+@router.get("/vehicles/reserved")
+async def get_reserved_vehicles():
+    connection = await get_db_connection()
+    try:
+        reserved_vehicles = await connection.fetch("""
+            SELECT v.id, v.model, o.order_type, o.status
+            FROM vehicles v
+            JOIN orders o ON v.id = o.vehicle_id
+            WHERE o.status = 'pending' OR o.status = 'approved'
+        """)
+        return {"data": reserved_vehicles}
+    finally:
+        await connection.close()
+
+@router.get("/orders/pending")
+async def get_pending_orders():
+    connection = await get_db_connection()
+    try:
+        orders = await connection.fetch("""
+            SELECT * FROM orders WHERE status = 'pending'
+        """)
+        return {"data": orders}
+    finally:
+        await connection.close()
+
