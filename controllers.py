@@ -1,6 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends
-from database import get_db_connection
+from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordRequestForm
+from databases import Database
+from database import DATABASE_URL
+import asyncpg
 from pydantic import BaseModel, PositiveFloat
+from auth import oauth2_scheme, create_access_token, verify_password, SECRET_KEY
+import jwt
+from jwt import PyJWTError
+
 from datetime import datetime
 
 router = APIRouter()
