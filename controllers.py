@@ -26,7 +26,7 @@ class Token(BaseModel):
 @router.get("/vehicles/")
 async def get_vehicles():
     try:
-        vehicles = await database.fetch_all("SELECT * FROM vehicles")  
+        vehicles = await database.fetch_all("SELECT * FROM vehicles WHERE is_sold = false")  
         return vehicles
     except Exception as e:
         return {"error": str(e)}
@@ -130,7 +130,7 @@ async def purchase_vehicle(order: OrderCreate):
         # Créer une commande d'achat avec un statut 'pending'
         query = """
             INSERT INTO orders (user_id, vehicle_id, order_type, status, start_date, return_date, created_at)
-            VALUES (:user_id, :vehicle_id, 'rental', 'pending',:start_date, :return_date, :created_at)
+            VALUES (:user_id, :vehicle_id, 'purchase', 'pending',:start_date, :return_date, :created_at)
         """
         values = {
             "user_id": order.user_id,
@@ -142,7 +142,7 @@ async def purchase_vehicle(order: OrderCreate):
 
         await database.execute(query, values)
 
-        return {"message": "Commande de location créée, en attente d'approbation"}
+        return {"message": "Commande de voiture créée, en attente d'approbation"}
 
     except Exception as e:
         return {"error": str(e)}
@@ -188,6 +188,8 @@ async def rent_vehicle(rental: OrderCreate):
             "start_date": start_date,  # Date de début
             "return_date": return_date,  # Date de retour
         }
+
+        print("Subscription:", rental)
 
         # Exécution de la requête pour insérer la commande dans la base de données
         await database.execute(query, values)

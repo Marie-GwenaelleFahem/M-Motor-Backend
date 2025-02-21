@@ -20,10 +20,9 @@ class OrderCreate(BaseModel):
     status: str = "pending"
     subscription: bool = False
     options: Optional[dict] = None
-    start_date: str
-    return_date: str
+    start_date: Optional[str] = None
+    return_date: Optional[str] = None
     
-
 # Côté authentification
 class Token(BaseModel):
     access_token: str
