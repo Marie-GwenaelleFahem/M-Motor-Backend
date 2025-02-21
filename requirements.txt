@@ -11,7 +11,9 @@ mysql-connector-python
 python-jose
 python-multipart
 asyncpg
-databases 
+databases
+psycopg
+
 
 
 # pip install -r requirements.txt
