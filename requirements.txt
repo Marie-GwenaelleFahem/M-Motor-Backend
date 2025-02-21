@@ -3,3 +3,19 @@ uvicorn
 databases
 asyncpg
 python-dotenv
+pyjwt[crypto]
+passlib[bcrypt]
+pydantic
+python-dotenv 
+mysql-connector-python
+python-jose
+python-multipart
+asyncpg
+databases
+psycopg
+
+
+
+# pip install -r requirements.txt
+# Pour lancer le serveur back :
+# python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload

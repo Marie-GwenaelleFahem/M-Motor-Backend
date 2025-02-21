@@ -1,5 +1,7 @@
 import os
 from dotenv import load_dotenv
+import psycopg2
+import os
 from databases import Database
 
 load_dotenv()
