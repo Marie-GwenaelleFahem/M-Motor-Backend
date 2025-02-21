@@ -1,4 +1,3 @@
-#Ce fichier permet en gros des shemas de validation, c'est avec fastAPI, ça permet de ne pas insérer n'imposte quoi en base et pour avoir une doc auss
 
 from pydantic import BaseModel
 from typing import Optional
@@ -21,5 +20,19 @@ class OrderCreate(BaseModel):
     status: str = "pending"
     subscription: bool = False
     options: Optional[dict] = None
-    start_date: Optional[str] = None
-    return_date: Optional[str] = None
+    start_date: str
+    return_date: str
+    
+
+# Côté authentification
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: str | None = None
+
+class UserCreate(BaseModel):
+    username: str
+    email: str
+    password: str
