@@ -1,19 +1,39 @@
 version: 0.2
 
+env:
+  variables:
+    LIGHTSAIL_IP: "15.237.176.155"  # IP publique de ton instance Lightsail
+
 phases:
   install:
     runtime-versions:
       python: 3.12
     commands:
-      - pip install pipenv
-      - pipenv install --deploy --ignore-pipfile
+      - echo "Installation des dépendances Python"
+      - pip install -r requirements.txt --target .
+
   build:
     commands:
-      - pipenv run pip freeze > requirements.txt
-      - zip -r function.zip .
+      - echo "Packaging de l'application FastAPI"
+      - zip -r fastapi-app.zip . -x '*.git*'
+
   post_build:
     commands:
-      - aws lambda update-function-code --function-name MonLambdaFunction --zip-file fileb://function.zip
+      - echo "Création et sécurisation de la clé SSH pour Lightsail"
+      - echo "$SSH_PRIVATE_KEY" > lightsail-key.pem
+      - chmod 600 lightsail-key.pem
+      
+      - echo "Transfert des fichiers vers Lightsail (IP: $LIGHTSAIL_IP)"
+      - scp -o StrictHostKeyChecking=no -i lightsail-key.pem fastapi-app.zip ec2-user@$LIGHTSAIL_IP:/home/ec2-user/app/
+
+      - echo "Décompression et redémarrage du service FastAPI sur Lightsail"
+      - ssh -o StrictHostKeyChecking=no -i lightsail-key.pem ec2-user@$LIGHTSAIL_IP << 'EOF'
+          cd /home/ec2-user/app
+          unzip -o fastapi-app.zip -d /home/ec2-user/app/
+          sudo systemctl restart fastapi
+          sudo systemctl enable fastapi
+        EOF
+
 artifacts:
   files:
-    - function.zip
+    - fastapi-app.zip
